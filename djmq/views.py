@@ -1,7 +1,7 @@
 import json
 from paho.mqtt import publish
 
-from djmq.models import User, Device
+from djmq.models import DeviceType, User, Device
 from django.http.response import HttpResponseBadRequest
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -59,8 +59,31 @@ def run_command(request, user_id, device_id):
 
     return HttpResponse(f"u={user_id}, d={device_id}, cmd={mq_cmd}")
 
-# def get_device(request, user_id, device_id):
-#     return HttpResponse(f"u={user_id}, d={device_id}")
+
+def update_firmware(request, user_id, device_id):
+    device_type = request.headers['Device-Type'][:2]
+    ver_type = request.headers['Device-Type'][2:]
+    device_version = request.headers['Device-Version']
+
+    dt_query = DeviceType.objects.filter(type=device_type)
+    if not dt_query.exists():
+        return HttpResponseBadRequest()
+    current_version = dt_query[0].latest_version
+    device_query = Device.objects.filter(pk=device_id, owner_id=user_id)
+    if not device_query.exists():
+        return HttpResponseBadRequest()
+    device = device_query[0]
+
+    if current_version != device_version:
+        path = "VK" + device_type + str(ver_type) + "V" + current_version + ".bin"
+        print(path)
+        device.version = current_version
+        device.save()
+        f = open(path, "rb")
+        return HttpResponse(f, content_type='application/octet-stream')
+    else:
+        return HttpResponse(status=304)
+
 
 def create_user(request, name):
     u = User(name=name)
