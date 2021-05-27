@@ -4,6 +4,7 @@ from paho.mqtt import publish
 from djmq.models import DeviceType, User, Device
 from django.http.response import HttpResponseBadRequest
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models.fields import NOT_PROVIDED
 
@@ -26,22 +27,19 @@ def run_command(request, user_id, device_id):
     cmd_schema = schema.get(cmd)
 
     # Поиск устройства в БД
-    device_query = Device.objects.filter(pk=device_id, owner_id=user_id)
-    if not device_query.exists():
-        return HttpResponseBadRequest()
-    device = device_query[0]
+    device = get_object_or_404(Device, pk=device_id, owner_id=user_id)
 
     # Валидация запроса
     if cmd_schema is None:
-        return HttpResponseBadRequest()
+        return HttpResponseBadRequest("No such command")
     if len(req['args']) != len(cmd_schema['args']):
-        return HttpResponseBadRequest()
+        return HttpResponseBadRequest("Incorrect number of arguments for this command")
 
     # Формирование команды для устройства
     mq_cmd = cmd_schema['cmd']
     for arg, schema_arg in zip(req['args'], cmd_schema['args']):
         if len(str(arg)) > schema_arg['length']:
-            return HttpResponseBadRequest()
+            return HttpResponseBadRequest("Incorrect argument size")
         mq_cmd += f"{arg:0{schema_arg['length']}}"
 
     # Отправка команды на устройство (брокер локальный)
@@ -65,14 +63,8 @@ def update_firmware(request, user_id, device_id):
     ver_type = request.headers['Device-Type'][2:]
     device_version = request.headers['Device-Version']
 
-    dt_query = DeviceType.objects.filter(type=device_type)
-    if not dt_query.exists():
-        return HttpResponseBadRequest()
-    current_version = dt_query[0].latest_version
-    device_query = Device.objects.filter(pk=device_id, owner_id=user_id)
-    if not device_query.exists():
-        return HttpResponseBadRequest()
-    device = device_query[0]
+    current_version = get_object_or_404(DeviceType, type=device_type).latest_version
+    device = get_object_or_404(Device, pk=device_id, owner_id=user_id)
 
     if current_version != device_version:
         path = "VK" + device_type + str(ver_type) + "V" + current_version + ".bin"

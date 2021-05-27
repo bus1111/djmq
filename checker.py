@@ -10,17 +10,15 @@ class Database:
     def __init__(self, db_path='db.sqlite3'):
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row
 
     def get_device_current_versions(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT type,latest_version from djmq_DeviceType')
-        versions = cur.fetchall()
+        versions = self.conn.execute('SELECT type,latest_version from djmq_DeviceType')
         return dict(versions)
 
     def get_device_installed_versions(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT id,owner_id,type_id,version from djmq_Device')
-        return cur.fetchall()
+        versions = self.conn.execute('SELECT id,owner_id,type_id,version from djmq_Device')
+        return versions
 
 
 def run_checker(db, log):
